@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worldsim</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .header {
+            background: #2d2d2d;
+            padding: 1rem;
+            border-bottom: 1px solid #444;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        label {
+            font-weight: 500;
+        }
+        
+        input[type="number"] {
+            width: 80px;
+            padding: 0.4rem;
+            background: #3a3a3a;
+            border: 1px solid #555;
+            color: #e0e0e0;
+            border-radius: 3px;
+        }
+        
+        button {
+            padding: 0.5rem 1rem;
+            background: #0e7c7b;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #0a5a59;
+        }
+        
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        
+        .status-banner {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 3px;
+            display: none;
+        }
+        
+        .status-banner.error {
+            background: #7c2f2f;
+            color: #ffb3b3;
+            display: block;
+        }
+        
+        .content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .log-column {
+            flex: 2;
+            overflow-y: auto;
+            padding: 1rem;
+            border-right: 1px solid #444;
+        }
+        
+        .state-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background: #252525;
+        }
+        
+        .tick-section {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #444;
+        }
+        
+        .tick-header {
+            font-weight: bold;
+            color: #4fc3f7;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+        
+        .event {
+            margin-bottom: 0.5rem;
+            padding-left: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        
+        .event.combat {
+            color: #f48771;
+        }
+        
+        .event.trade {
+            color: #81c784;
+        }
+        
+        .event.diplomacy {
+            color: #64b5f6;
+        }
+        
+        .event.other {
+            color: #b0bec5;
+        }
+        
+        .culture-panel {
+            margin-bottom: 1.5rem;
+            padding: 0.8rem;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 3px;
+        }
+        
+        .culture-name {
+            font-weight: bold;
+            color: #4fc3f7;
+            margin-bottom: 0.4rem;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 0.2rem;
+        }
+        
+        .stat-label {
+            color: #999;
+        }
+        
+        .stat-value {
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+        
+        .regions-panel {
+            margin-top: 1rem;
+            padding: 0.8rem;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 3px;
+        }
+        
+        .regions-title {
+            font-weight: bold;
+            color: #4fc3f7;
+            margin-bottom: 0.5rem;
+        }
+        
+        .region-item {
+            font-size: 0.85rem;
+            margin-bottom: 0.3rem;
+            padding: 0.3rem;
+            background: #1a1a1a;
+            border-left: 3px solid #555;
+            padding-left: 0.6rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="controls">
+                <label for="seed">Seed:</label>
+                <input type="number" id="seed" value="42">
+                
+                <label for="ticks">Ticks:</label>
+                <input type="number" id="ticks" value="10" min="1" max="100">
+                
+                <button id="startBtn" onclick="startRun()">Start</button>
+                <button id="stepBtn" onclick="stepOnce()" disabled>Step</button>
+                <button id="runBtn" onclick="runToEnd()" disabled>Run to End</button>
+            </div>
+            <div id="statusBanner" class="status-banner"></div>
+        </div>
+        
+        <div class="content">
+            <div class="log-column" id="logColumn">
+                <div style="color: #999; font-size: 0.9rem;">Simulation log will appear here...</div>
+            </div>
+            
+            <div class="state-panel" id="statePanel">
+                <div style="color: #999; font-size: 0.9rem;">World state will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let currentTick = 0;
+        let targetTicks = 10;
+        
+        async function startRun() {
+            const seed = parseInt(document.getElementById("seed").value);
+            const ticks = parseInt(document.getElementById("ticks").value);
+            targetTicks = ticks;
+            
+            try {
+                const response = await fetch("/api/run", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ seed, ticks }),
+                });
+                
+                const data = await response.json();
+                if (data.ok) {
+                    currentTick = 0;
+                    document.getElementById("logColumn").innerHTML = "";
+                    document.getElementById("statusBanner").innerHTML = "";
+                    document.getElementById("statusBanner").classList.remove("error");
+                    updateState();
+                    document.getElementById("stepBtn").disabled = false;
+                    document.getElementById("runBtn").disabled = false;
+                }
+            } catch (e) {
+                showError("Failed to start run: " + e.message);
+            }
+        }
+        
+        async function stepOnce() {
+            try {
+                const response = await fetch("/api/step", { method: "POST" });
+                const data = await response.json();
+                
+                if (data.status === "error") {
+                    showError(data.new_events ? data.new_events[0] : "Unknown error");
+                    return;
+                }
+                
+                addEventsToLog(data.new_events, data.tick);
+                currentTick = data.tick;
+                await updateState();
+                
+                if (data.status === "complete") {
+                    document.getElementById("stepBtn").disabled = true;
+                    document.getElementById("runBtn").disabled = true;
+                }
+            } catch (e) {
+                showError("Step failed: " + e.message);
+            }
+        }
+        
+        async function runToEnd() {
+            isRunning = true;
+            document.getElementById("startBtn").disabled = true;
+            document.getElementById("stepBtn").disabled = true;
+            document.getElementById("runBtn").disabled = true;
+            
+            while (isRunning && currentTick < targetTicks) {
+                await stepOnce();
+                await new Promise(r => setTimeout(r, 600)); // 600ms delay between steps
+                
+                if (currentTick >= targetTicks) break;
+            }
+            
+            isRunning = false;
+            document.getElementById("startBtn").disabled = false;
+        }
+        
+        function addEventsToLog(events, tick) {
+            const logColumn = document.getElementById("logColumn");
+            
+            // Check if we already have a tick header for this tick
+            let tickSection = document.querySelector(`[data-tick="${tick}"]`);
+            if (!tickSection) {
+                tickSection = document.createElement("div");
+                tickSection.className = "tick-section";
+                tickSection.setAttribute("data-tick", tick);
+                
+                const header = document.createElement("div");
+                header.className = "tick-header";
+                header.textContent = `## Tick ${tick}`;
+                tickSection.appendChild(header);
+                
+                logColumn.appendChild(tickSection);
+            }
+            
+            // Add events
+            for (const event of events) {
+                const eventDiv = document.createElement("div");
+                eventDiv.className = "event ";
+                
+                // Classify event type for coloring
+                if (event.type.includes("attack") || event.type.includes("blocked")) {
+                    eventDiv.classList.add("combat");
+                } else if (event.type.includes("trade")) {
+                    eventDiv.classList.add("trade");
+                } else if (event.type.includes("diplomacy")) {
+                    eventDiv.classList.add("diplomacy");
+                } else {
+                    eventDiv.classList.add("other");
+                }
+                
+                eventDiv.textContent = event.narrative || event.description;
+                tickSection.appendChild(eventDiv);
+            }
+        }
+        
+        async function updateState() {
+            try {
+                const response = await fetch("/api/state");
+                const state = await response.json();
+                
+                const statePanel = document.getElementById("statePanel");
+                statePanel.innerHTML = "";
+                
+                // Cultures
+                for (const [cultureId, culture] of Object.entries(state.cultures)) {
+                    const cultDiv = document.createElement("div");
+                    cultDiv.className = "culture-panel";
+                    
+                    const name = document.createElement("div");
+                    name.className = "culture-name";
+                    name.textContent = culture.name;
+                    cultDiv.appendChild(name);
+                    
+                    const pop = document.createElement("div");
+                    pop.className = "stat-row";
+                    pop.innerHTML = `<span class="stat-label">Population:</span><span class="stat-value">${culture.population}</span>`;
+                    cultDiv.appendChild(pop);
+                    
+                    const food = document.createElement("div");
+                    food.className = "stat-row";
+                    food.innerHTML = `<span class="stat-label">Food:</span><span class="stat-value">${culture.resources.food}</span>`;
+                    cultDiv.appendChild(food);
+                    
+                    const ore = document.createElement("div");
+                    ore.className = "stat-row";
+                    ore.innerHTML = `<span class="stat-label">Ore:</span><span class="stat-value">${culture.resources.ore}</span>`;
+                    cultDiv.appendChild(ore);
+                    
+                    const wealth = document.createElement("div");
+                    wealth.className = "stat-row";
+                    wealth.innerHTML = `<span class="stat-label">Wealth:</span><span class="stat-value">${culture.resources.wealth}</span>`;
+                    cultDiv.appendChild(wealth);
+                    
+                    const tech = document.createElement("div");
+                    tech.className = "stat-row";
+                    tech.innerHTML = `<span class="stat-label">Tech:</span><span class="stat-value">${culture.tech_count}</span>`;
+                    cultDiv.appendChild(tech);
+                    
+                    for (const [otherId, relation] of Object.entries(culture.relations)) {
+                        const rel = document.createElement("div");
+                        rel.className = "stat-row";
+                        const otherName = state.cultures[otherId] ? state.cultures[otherId].name : otherId;
+                        rel.innerHTML = `<span class="stat-label">vs ${otherName}:</span><span class="stat-value">${relation}</span>`;
+                        cultDiv.appendChild(rel);
+                    }
+                    
+                    statePanel.appendChild(cultDiv);
+                }
+                
+                // Regions
+                const regionsDiv = document.createElement("div");
+                regionsDiv.className = "regions-panel";
+                
+                const regionsTitle = document.createElement("div");
+                regionsTitle.className = "regions-title";
+                regionsTitle.textContent = "Regions";
+                regionsDiv.appendChild(regionsTitle);
+                
+                for (const [regionId, region] of Object.entries(state.regions)) {
+                    const regDiv = document.createElement("div");
+                    regDiv.className = "region-item";
+                    const occupant = region.occupant ? state.cultures[region.occupant].name : "unoccupied";
+                    regDiv.textContent = `${region.name} (${occupant})`;
+                    regionsDiv.appendChild(regDiv);
+                }
+                
+                statePanel.appendChild(regionsDiv);
+            } catch (e) {
+                console.error("Failed to update state:", e);
+            }
+        }
+        
+        function showError(message) {
+            const banner = document.getElementById("statusBanner");
+            banner.textContent = "Error: " + message;
+            banner.classList.add("error");
+        }
+    </script>
+</body>
+</html>
