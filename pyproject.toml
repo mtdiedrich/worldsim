@@ -1,8 +1,14 @@
 [project]
 name = "worldsim"
 version = "0.1.0"
-description = "A Python project"
-requires-python = ">=3.11"
+description = "A turn-based simulation with LLM agents"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.100",
+    "uvicorn>=0.23",
+    "anthropic>=0.18",
+    "python-dotenv>=1.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -11,6 +17,9 @@ dev = [
     "ruff>=0.1",
     "ipython>=8.0",
 ]
+
+[project.scripts]
+worldsim-server = "worldsim.cli:run_server"
 
 [build-system]
 requires = ["setuptools>=61.0"]
