@@ -46,9 +46,11 @@ def run_agent(seed: dict, memory: dict, filtered_view: dict) -> dict:
     
     user_prompt = AGENT_USER_TEMPLATE.format(
         tick=filtered_view["tick"],
+        year=filtered_view.get("year", filtered_view["tick"]),
         filtered_view_json=json.dumps(filtered_view, indent=2),
         recent_events=recent_events_str,
         beliefs=memory.get("beliefs", "(no standing beliefs)"),
+        name_hint=seed["name"],
     )
     
     # Try to get a valid action from the LLM

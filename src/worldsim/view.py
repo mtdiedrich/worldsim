@@ -45,7 +45,9 @@ def build_filtered_view(world: dict, culture_id: str) -> dict:
             "name": region["name"],
             "terrain": region["terrain"],
             "resources": copy.copy(region["resources"]),
+            "yield": copy.copy(region.get("yield", {})),
             "occupant": region["occupant"],
+            "populace": region.get("populace"),
             "adjacent": region["adjacent"],
         }
     
@@ -60,6 +62,9 @@ def build_filtered_view(world: dict, culture_id: str) -> dict:
                 visible_cultures[occupant] = {
                     "name": other_culture["name"],
                     "home_region": other_culture["home_region"],
+                    "ruler": other_culture.get("ruler"),
+                    "house": other_culture.get("house"),
+                    "religion": other_culture.get("religion"),
                     "relations": other_culture["relations"].get(culture_id, 0),
                 }
     
@@ -68,13 +73,23 @@ def build_filtered_view(world: dict, culture_id: str) -> dict:
     
     return {
         "tick": world["tick"],
+        "year": world.get("year", world["tick"]),
         "culture": {
             "id": culture["id"] if "id" in culture else culture_id,
             "name": culture["name"],
             "home_region": culture["home_region"],
+            "controls": sorted(occupied_regions),
             "population": culture["population"],
             "resources": copy.copy(culture["resources"]),
-            "tech": copy.copy(culture["tech"]),
+            "ruler": culture.get("ruler"),
+            "house": culture.get("house"),
+            "ruler_age": culture.get("ruler_age"),
+            "overlord": culture.get("overlord"),
+            "tributaries": list(culture.get("tributaries", [])),
+            "marriages": list(culture.get("marriages", [])),
+            "religion": culture.get("religion"),
+            "tech": [t["name"] if isinstance(t, dict) else t for t in culture.get("tech", [])],
+            "institutions": [i["name"] for i in culture.get("institutions", [])],
             "relations": copy.copy(culture["relations"]),
         },
         "regions": visible_regions_dict,

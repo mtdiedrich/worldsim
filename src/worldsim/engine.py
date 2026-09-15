@@ -4,13 +4,11 @@ import random
 import copy
 import json
 from pathlib import Path
-from worldsim.config import RUN_SEED, N_TICKS
+from worldsim.config import RUN_SEED, N_TICKS, YEARS_PER_TICK
 from worldsim.seeds import get_initial_world, CULTURE_SEEDS
-from worldsim.memory import create_empty_memory, update_memory
-from worldsim.view import build_filtered_view
-from worldsim.agent import run_agent
-from worldsim.arbiter import resolve
-from worldsim.economy import apply_economy, maybe_random_event
+from worldsim.memory import create_empty_memory
+from worldsim.chronicler import chronicle
+from worldsim.dynamics import run_dynamics
 
 
 def new_run(run_seed: int = RUN_SEED, n_ticks: int = N_TICKS) -> dict:
@@ -30,10 +28,12 @@ def new_run(run_seed: int = RUN_SEED, n_ticks: int = N_TICKS) -> dict:
     memory = {}
     for culture_id in world["cultures"].keys():
         memory[culture_id] = create_empty_memory(culture_id)
-    
+
     return {
         "world": world,
         "memory": memory,
+        # runtime registry of culture seeds; grows as the Chronicler births new peoples
+        "seeds": copy.deepcopy(CULTURE_SEEDS),
         "tick": 0,
         "n_ticks": n_ticks,
         "status": "idle",
@@ -66,45 +66,21 @@ def step(run_state: dict) -> dict:
         # Increment tick
         run_state["tick"] += 1
         world["tick"] = run_state["tick"]
-        
-        # Run economy (production, consumption, growth, starvation) and random events
-        tick_events = apply_economy(world)
-        tick_events += maybe_random_event(world)
-        world["event_log"].extend(tick_events)
-        
-        # Collect actions from each culture
-        collected_actions = []
-        for culture_id in sorted(world["cultures"].keys()):
-            view = build_filtered_view(world, culture_id)
-            seed_cfg = CULTURE_SEEDS[culture_id]
-            action = run_agent(seed_cfg, memory[culture_id], view)
-            
-            # Update memory with beliefs
-            memory[culture_id] = update_memory(
-                memory[culture_id],
-                events=[],
-                beliefs=action.get("beliefs")
-            )
-            
-            collected_actions.append(action)
-        
-        # Resolve actions into world changes
-        new_world, events = resolve(world, collected_actions)
-        world.update(new_world)
-        world["event_log"].extend(events)
-        
-        # All events this tick: economy/world events + action events
-        all_tick_events = tick_events + events
-        
-        # Feed all events back into memory
-        for culture_id in world["cultures"]:
-            relevant = [e for e in all_tick_events if culture_id in e["involved"]]
-            memory[culture_id] = update_memory(
-                memory[culture_id],
-                events=relevant,
-                beliefs=None
-            )
-        
+        world["year"] = run_state["tick"] * YEARS_PER_TICK
+
+        seeds = run_state["seeds"]
+
+        # The structural engine advances the world: carrying capacity, population,
+        # the secular cycle, asabiyya, expansion/conquest, diffusion, shocks, and
+        # the fracturing of overstrained realms into new peoples.
+        struct_events, newborns = run_dynamics(world, seeds, memory)
+
+        # The Chronicler names the newborn peoples and narrates the human texture.
+        narration = chronicle(world, seeds, memory, struct_events, newborns)
+
+        all_tick_events = struct_events + narration
+        world["event_log"].extend(all_tick_events)
+
         run_state["status"] = "running" if run_state["tick"] < run_state["n_ticks"] else "complete"
         
         # Store new events for this tick (for API response)
